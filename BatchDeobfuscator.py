@@ -1,4 +1,4 @@
-import sys
+import sys, re
 
 f = open(sys.argv[1], 'rb')
 d = {b'public': b'C:\\Users\\Public'}
@@ -29,14 +29,12 @@ for line in f.readlines():
                 newstr = d[varname][varslice[0]:varslice[0]+varslice[1]]
             else:
                 print('Error!')
-                newstr = b''
+                break
             
             line = line.replace(var, newstr, 1)
     
-    if line.find(b'@set') != -1:
-        n1 = line.find(b'"')
-        n2 = line[n1+1:].find(b'"')
-        setarg = line[n1+1:n1+n2+1].split(b'=', 1)
-        d[setarg[0].lower()] = setarg[1]
+    search = re.search(b'[Ss][Ee][Tt] ["]?(.*?)=(.*)', line)
+    if search:
+        d[search[1].lower()] = search[2]
 
     print(str(line, 'utf-8').lstrip().replace('$errorlevel$', '%ErrorLevel%'), end='')
