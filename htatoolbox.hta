@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>HTA Toolbox</title>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<style>
+			body {
+				overflow-x: hidden;
+			}
+			
+			input {
+				width: 1000px;
+			}
+			
+			button {
+				margin-left: 5px;
+			}
+			
+			textarea {
+				width: 100%;
+				height: 500px;
+			}
+
+			progress {
+				width: 500px;
+			}
+		</style>
+	</head>
+	<body>
+		<h1><b>HTA Toolbox</b></h1>
+		<p>Made by Ingan121</p>
+		<hr>
+		<h3>Execute</h3>
+		<p><input id="execInput" type="text" onkeypress="if(event.keyCode==13)run(this.value)"><button onclick="run(execInput.value)">Open</button><button onclick="exec(execInput.value)">Execute</button><br>
+		* Open uses ShellExecute, which executes a program associated with the file's extension. Execute forces execution of binaries regardless of their extension, using conhost.exe.</p>
+		<hr>
+		<h3>Download</h3>
+		<p>Source (URL): <input id="dlSrcInput" type="text" onkeypress="if(event.keyCode==13)dl()"><br>
+		Destination (Path): <input id="dlDstInput" type="text" onkeypress="if(event.keyCode==13)dl()"><button onclick="dl()">Download</button><br>
+		<progress id="progress" value="0"></progress><br>
+		<span id="dlStatus"></span></p>
+		<hr>
+		<h3>Copy / Move</h3>
+		<p>Source (Path): <input id="srcInput" type="text" onkeypress="if(event.keyCode==13)copy()"><br>
+		Destination (Path): <input id="dstInput" type="text" onkeypress="if(event.keyCode==13)copy()"><button onclick="copy()">Copy</button><button onclick="move()">Move</button></p>
+		<hr>
+		<h3>Other File Operations</h3>
+		<p>File Path: <input id="fileInput" type="text" onkeypress="if(event.keyCode==13)list()"><br>
+		<button onclick="del()" style="margin: 0">Delete</button><button onclick="exists()">Check Existence</button><button onclick="mkdir()">Create Directory</button><button onclick="list()">List Directory</button></p>
+		<div id="listArea"></div>
+		<hr>
+		<h3>Embedded File Explorer</h3>
+		<a href="file:///">Drag and drop this to the below area</a><br><br>
+		<button onclick="loDst(getEnv('%appdata%\\Microsoft\\Windows\\Network Shortcuts\\'))">Click this and copy files there to make them show below</button><br>
+		<object width="700px" height="500px" classid="clsid:8856F961-340A-11D0-A96B-00C04FD705A2">
+			<PARAM NAME="ExtentX" VALUE="39688">
+			<PARAM NAME="ExtentY" VALUE="18521">
+			<PARAM NAME="ViewMode" VALUE="4">
+			<PARAM NAME="Offline" VALUE="0">
+			<PARAM NAME="Silent" VALUE="0">
+			<PARAM NAME="RegisterAsBrowser" VALUE="0">
+			<PARAM NAME="RegisterAsDropTarget" VALUE="1">
+			<PARAM NAME="AutoArrange" VALUE="0">
+			<PARAM NAME="NoClientEdge" VALUE="0">
+			<PARAM NAME="AlignLeft" VALUE="0">
+			<PARAM NAME="NoWebView" VALUE="0">
+			<PARAM NAME="HideFileNames" VALUE="0">
+			<PARAM NAME="SingleClick" VALUE="0">
+			<PARAM NAME="SingleSelection" VALUE="0">
+			<PARAM NAME="NoFolders" VALUE="0">
+			<PARAM NAME="Transparent" VALUE="0">
+			<PARAM NAME="ViewID" VALUE="{6C6720F7-4B22-4CAA-82D6-502BB6F85A9A}">
+			<PARAM NAME="Location" VALUE="about:Drag and drop the above link here.">
+		</object>
+		<hr>
+		<h3>Miscellaneous</h3>
+		<p><button onclick="dirPicker()">Open Folder Selection Dialog</button></p>
+		<hr>
+		<h3>JavaScript Execution</h3>
+		<textarea id="jsInput"></textarea><button onclick="eval(jsInput.value)">Execute</button>
+
+		<script>
+			const fso = new ActiveXObject('Scripting.FileSystemObject');
+			const shell = new ActiveXObject("WScript.Shell");
+			
+			const isWoW64 = getEnv("%PROCESSOR_ARCHITECTURE%") == 'x86';
+			const cacheDir = getEnv('%localappdata%\\Microsoft\\Windows\\INetCache\\IE\\');
+
+			function run(cmd) {
+				shell.run(cmd);
+			}
+
+			function exec(cmd) {
+				run((isWoW64 ? 'C:\\Windows\\SysNative\\conhost.exe "' : 'C:\\Windows\\System32\\conhost.exe "') + cmd + '"');
+			}
+
+			function dl(callback) {
+				const src = dlSrcInput.value;
+				const dst = getEnv(dlDstInput.value);
+				const xhr = new XMLHttpRequest;
+
+				xhr.open('GET', src, true);
+				xhr.send();
+
+				dlStatus.textContent = 'Downloading...';
+				progress.value = 0;
+				xhr.onload = function () {
+					switch (xhr.status) {
+					case 200:
+						// Create the Data Stream
+						var stream = new ActiveXObject('ADODB.Stream');
+
+						// Establish the Stream
+						stream.Open();
+						stream.Type = 1; // adTypeBinary
+						stream.Write(xhr.responseBody);
+						stream.Position = 0;
+
+						// Create an Empty Target File
+						if (fso.FileExists(dst))
+						{
+							fso.DeleteFile(dst);
+						}
+
+						// Write the Data Stream to the File
+						stream.SaveToFile(dst, 2); // adSaveCreateOverWrite
+						stream.Close();
+						dlStatus.textContent = 'Download complete!';
+						progress.max = 1;
+						progress.value = 1;
+						dlDstInput.value = fso.GetAbsolutePathName(dst);
+						if (callback) callback();
+						break;
+					case 403:
+						dlStatus.textContent = '403 Forbidden';
+						break;
+					case 404:
+						dlStatus.textContent = '404 Not Found';
+						break;
+					case 500:
+						dlStatus.textContent = '500 Internal Server Error';
+						break;
+					default:
+						dlStatus.textContent = 'HTTP Error ' + xhr.status;
+					}
+					if (xhr.status != 200) progress.value = 0;
+				}
+				xhr.onerror = function () {
+					dlStatus.textContent = 'Error!';
+				}
+				xhr.onprogress = function (e) {
+					if (e.lengthComputable) {
+						progress.max = e.total;
+						progress.value = e.loaded;
+						dlStatus.textContent = 'Downloading... (' + e.loaded + '/' + e.total + ')';
+					} else {
+						progress.removeAttribute("value");
+					}
+				}
+			}
+			
+			function copy() {
+				const src = srcInput.value;
+				const dst = dstInput.value;
+				if (fso.FileExists(src)) fso.CopyFile(src, dst);
+				else if (fso.FolderExists(src)) fso.CopyFolder(src, dst);
+				else alert('File doesn\'t exist.');
+			}
+			
+			function move() {
+				const src = srcInput.value;
+				const dst = dstInput.value;
+				if (fso.FileExists(src)) fso.MoveFile(src, dst);
+				else if (fso.FolderExists(src)) fso.MoveFolder(src, dst);
+				else alert('File doesn\'t exist.');
+			}
+			
+			function del() {
+				const file = fileInput.value;
+				if (fso.FileExists(file)) fso.DeleteFile(file);
+				else if (fso.FolderExists(file)) fso.DeleteFolder(file);
+				else alert('File doesn\'t exist.');
+			}
+			
+			function exists() {
+				const file = fileInput.value;
+				if (fso.FileExists(file)) alert('File exists.');
+				else if (fso.FolderExists(file)) alert('Directory exists.');
+				else alert('File doesn\'t exist.');
+			}
+			
+			function mkdir() {
+				const dir = fileInput.value;
+				fso.CreateFolder(dir);
+			}
+			
+			function list() {
+				const input = getEnv(fileInput.value);
+				const absName = fso.GetAbsolutePathName(input);
+				const dir = fso.GetFolder(input);
+				const files = dir.Files;
+				const folders = dir.SubFolders;
+				fileInput.value = absName;
+				
+				let listStr = '<button style="margin: 0" onclick="loDir(\'' + (fso.GetParentFolderName(absName) + '').replace(/\\/g, '\\\\') + '\')">Up</button><table><th>File Name</th><th>Size</th><th>Last Modified</th><th>Operations</th>';
+				for(var objEnum = new Enumerator(folders); !objEnum.atEnd(); objEnum.moveNext()) {
+					listStr += '<tr><td>' + objEnum.item().Name + '</td><td>DIR</td><td>' + objEnum.item().DateLastModified + '</td><td><button style="margin: 0" onclick="loDir(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">Dir</button><button onclick="loExec(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">Exec</button><button onclick="loSrc(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">Src</button><button onclick="loDst(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">Dst</button><button onclick="loFileOps(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">FileOps</button></td></tr>';
+				}
+				for(var objEnum = new Enumerator(files); !objEnum.atEnd(); objEnum.moveNext()) {
+					listStr += '<tr><td>' + objEnum.item().Name + '</td><td>' + objEnum.item().Size + '</td><td>' + objEnum.item().DateLastModified + '</td><td><button style="margin: 0" onclick="loExec(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">Exec</button><button onclick="loSrc(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">Src</button><button onclick="loDst(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">Dst</button><button onclick="loFileOps(\'' + (objEnum.item() + '').replace(/\\/g, '\\\\') + '\')">FileOps</button></td></tr>';
+				}
+				listArea.innerHTML = listStr + '</table>';
+			}
+
+			function dirPicker() {
+				new ActiveXObject("Shell.Application").BrowseForFolder(0, "Drag and drop a folder onto a directory input tag in Edge.", 0, 0);
+			}
+
+			function loDir(file) {
+				fileInput.value = file;
+				list();
+			}
+
+			function loExec(file) {
+				execInput.value = '"' + file + '"';
+			}
+
+			function loSrc(file) {
+				srcInput.value = file;
+			}
+
+			function loDst(file) {
+				dstInput.value = file;
+			}
+
+			function loFileOps(file) {
+				fileInput.value = file;
+			}
+
+			function getEnv(str) {
+				return shell.ExpandEnvironmentStrings(str);
+			}
+
+			function findFileInCacheDir(filename) {
+				const name = filename.slice(0, filename.lastIndexOf("."));
+				const ext = filename.slice(filename.lastIndexOf("."));
+
+				const dir = fso.GetFolder(cacheDir);
+				const folders = dir.SubFolders;
+
+				for(var objEnum = new Enumerator(folders); !objEnum.atEnd(); objEnum.moveNext()) {
+					var subdir = fso.GetFolder(objEnum.item());
+					var files = subdir.Files;
+					
+					for(var objEnum2 = new Enumerator(files); !objEnum2.atEnd(); objEnum2.moveNext()) {
+						if (objEnum2.item().Name.match(new RegExp(name + "\\[(.*)\\]" + ext))) {
+							return objEnum2.item() + '';
+						}
+					}
+				}
+				return null;
+			}
+		</script>
+	</body>
+</html>
