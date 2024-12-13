@@ -18,9 +18,6 @@
 * Add other CEF apps on your own
 * May not work or look bad in other CEF apps
 * Electron apps are NOT supported! Just patch asar to override frame: false to true in BrowserWindow creation
-* Tested CEF versions: 102 and 106
-* Tested Spotify versions: 1.1.89 and 1.1.97
-    * Neither DWM nor non-DWM window controls work properly in these versions
 */
 // ==/WindhawkModReadme==
 
@@ -1442,6 +1439,8 @@ cef_window_create_top_level_t cef_window_create_top_level_original;
 _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate) {
     Wh_Log(L"cef_window_create_top_level_hook");
 
+
+    Wh_Log(L"is_frameless offset: %#x", (char *)&(delegate->is_frameless) - (char *)delegate);
     delegate->is_frameless = is_frameless_hook;
     mainWindow = cef_window_create_top_level_original(delegate);
     Wh_Log(L"%d", mainWindow->add_overlay_view);
@@ -1454,37 +1453,31 @@ _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate)
 }
 
 
-/*
-///
-/// Create a new browser using the window parameters specified by |windowInfo|.
-/// All values will be copied internally and the actual window (if any) will be
-/// created on the UI thread. If |request_context| is NULL the global request
-/// context will be used. This function can be called on any browser process
-/// thread and will not block. The optional |extra_info| parameter provides an
-/// opportunity to specify extra information specific to the created browser
-/// that will be passed to cef_render_process_handler_t::on_browser_created() in
-/// the render process.
-///
-CEF_EXPORT int cef_browser_host_create_browser(
-    const cef_window_info_t* windowInfo,
-    struct _cef_client_t* client,
-    const cef_string_t* url,
-    const struct _cef_browser_settings_t* settings,
-    struct _cef_dictionary_value_t* extra_info,
-    struct _cef_request_context_t* request_context);
-*/
+int cnt = 0;
 
-typedef int (*cef_browser_host_create_browser_t)(const cef_window_info_t* windowInfo,
-  struct _cef_client_t* client,
-  const cef_string_t* url,
-  const struct _cef_browser_settings_t* settings,
-  struct _cef_dictionary_value_t* extra_info,
-  struct _cef_request_context_t* request_context);
-cef_browser_host_create_browser_t cef_browser_host_create_browser_original;
-int cef_browser_host_create_browser_hook(const cef_window_info_t* windowInfo, struct _cef_client_t* client, const cef_string_t* url, const struct _cef_browser_settings_t* settings, struct _cef_dictionary_value_t* extra_info, struct _cef_request_context_t* request_context) {
-    Wh_Log(L"cef_browser_host_create_browser_hook");
-    return cef_browser_host_create_browser_original(windowInfo, client, url, settings, extra_info, request_context);
+typedef void (*add_child_view_t)(struct _cef_panel_t* self, struct _cef_view_t* view);
+add_child_view_t CEF_CALLBACK add_child_view_original;
+void CEF_CALLBACK add_child_view_hook(struct _cef_panel_t* self, struct _cef_view_t* view) {
+    Wh_Log(L"add_child_view_hook: %d", cnt++);
+    // 0: Minimize, 1: Maximize, 2: Close, 3: Menu (removing this also prevents alt key from working)
+    if (cnt == 4) {
+        add_child_view_original(self, view);
+    }
+    return;
 }
+
+typedef _cef_panel_t* (*cef_panel_create_t)(_cef_panel_delegate_t* delegate);
+cef_panel_create_t cef_panel_create_original;
+_cef_panel_t* cef_panel_create_hook(_cef_panel_delegate_t* delegate) {
+    Wh_Log(L"cef_panel_create_hook");
+    _cef_panel_t* panel = cef_panel_create_original(delegate);
+    add_child_view_original = panel->add_child_view;
+    Wh_Log(L"add_child_view offset: %#x", (char *)&(panel->add_child_view) - (char *)panel);
+    panel->add_child_view = add_child_view_hook;
+    return panel;
+}
+
+typedef int (*cef_version_info_t)(int entry);
 
 // The mod is being initialized, load settings, hook functions, and do other
 // initialization stuff if required.
@@ -1495,10 +1488,27 @@ BOOL Wh_ModInit() {
     cef_window_create_top_level_t cef_window_create_top_level =
         (cef_window_create_top_level_t)GetProcAddress(cefModule,
                                                 "cef_window_create_top_level");
+    cef_panel_create_t cef_panel_create =
+        (cef_panel_create_t)GetProcAddress(cefModule, "cef_panel_create");
+    cef_version_info_t cef_version_info =
+        (cef_version_info_t)GetProcAddress(cefModule, "cef_version_info");
+
+    Wh_Log(L"CEF v%d.%d.%d.%d (Chromium v%d.%d.%d.%d) Loaded",
+        cef_version_info(0),
+        cef_version_info(1),
+        cef_version_info(2),
+        cef_version_info(3),
+        cef_version_info(4),
+        cef_version_info(5),
+        cef_version_info(6),
+        cef_version_info(7)
+    );
 
     Wh_SetFunctionHook((void*)cef_window_create_top_level,
                        (void*)cef_window_create_top_level_hook,
                        (void**)&cef_window_create_top_level_original);
+    Wh_SetFunctionHook((void*)cef_panel_create, (void*)cef_panel_create_hook,
+                      (void**)&cef_panel_create_original);
     return TRUE;
 }
 

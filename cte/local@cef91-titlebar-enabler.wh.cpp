@@ -18,10 +18,7 @@
 * Add other CEF apps on your own
 * May not work or look bad in other CEF apps
 * Electron apps are NOT supported! Just patch asar to override frame: false to true in BrowserWindow creation
-* Tested CEF versions: 90.6, 91.1
-* Tested Spotify versions: 1.1.60 to 1.1.67
-    * Both DWM and non-DWM window controls work fine in these versions
-    * 1.1.67 is the last version that has separate child windows for window controls that can be hidden easily
+* Tested CEF versions: 91.3 to 101
 */
 // ==/WindhawkModReadme==
 
@@ -1355,6 +1352,7 @@ cef_window_create_top_level_t cef_window_create_top_level_original;
 _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate) {
     Wh_Log(L"cef_window_create_top_level_hook");
 
+    Wh_Log(L"is_frameless offset: %#x", (char *)&(delegate->is_frameless) - (char *)delegate);
     delegate->is_frameless = is_frameless_hook;
     mainWindow = cef_window_create_top_level_original(delegate);
 

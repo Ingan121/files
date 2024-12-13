@@ -1,6 +1,6 @@
 // ==WindhawkMod==
-// @id              cef-titlebar-enabler
-// @name            CEF/Spotify Titlebar Enabler (structs ver)
+// @id              cef116-titlebar-enabler
+// @name            CEF/Spotify Titlebar Enabler for CEF 116
 // @description     Force native frames and title bars for CEF apps
 // @version         0.1
 // @author          Ingan121
@@ -15,28 +15,36 @@
 /*
 # CEF Titlebar Enabler
 * Force native frames and title bars for CEF apps, such as Spotify
-* Only works on apps using native CEF top-level windows
-    * Steam uses SDL for their top-level windows, so this mod doesn't work with Steam
-* Electron apps are NOT supported! Just patch asar to override 'frame: false' to true in BrowserWindow creation
-* Tested CEF versions: 124 to 130
-* Tested Spotify versions: 1.2.38 to 1.2.52
-    * Neither DWM nor non-DWM window controls work properly in these versions
-    * 1.2.45 is the last version that can disable the global navbar
+* Add other CEF apps on your own
+* May not work or look bad in other CEF apps
+* Electron apps are NOT supported! Just patch asar to override frame: false to true in BrowserWindow creation
 */
 // ==/WindhawkModReadme==
 
 // ==WindhawkModSettings==
 // ==/WindhawkModSettings==
 
+/*
+CEF_EXPORT cef_window_t* cef_window_create_top_level(
+    struct _cef_window_delegate_t* delegate);*/
 
 #include <cstdint>
-#include <libloaderapi.h>
 #include <windhawk_utils.h>
 
 #define CEF_CALLBACK __stdcall
 #define cef_window_handle_t HWND
 
 #pragma region Dirty CEF headers copypasta
+
+// typedef struct _cef_string_utf8_t {
+//   char* str;
+//   size_t length;
+//   void (*dtor)(char* str);
+// } cef_string_utf8_t;
+
+// typedef cef_string_utf8_t cef_string_t;
+// typedef cef_string_utf8_t* cef_string_userfree_utf8_t;
+// typedef cef_string_userfree_utf8_t cef_string_userfree_t;
 
 typedef struct _cef_string_utf16_t {
   char16_t* str;
@@ -74,21 +82,10 @@ typedef enum {
 /// Show states supported by CefWindowDelegate::GetInitialShowState.
 ///
 typedef enum {
-  // Show the window as normal.
   CEF_SHOW_STATE_NORMAL = 1,
-
-  // Show the window as minimized.
   CEF_SHOW_STATE_MINIMIZED,
-
-  // Show the window as maximized.
   CEF_SHOW_STATE_MAXIMIZED,
-
-  // Show the window as fullscreen.
   CEF_SHOW_STATE_FULLSCREEN,
-
-  // Show the window as hidden (no dock thumbnail).
-  // Only supported on MacOS.
-  CEF_SHOW_STATE_HIDDEN,
 } cef_show_state_t;
 
 ///
@@ -184,45 +181,6 @@ typedef struct _cef_key_event_t {
 } cef_key_event_t;
 
 ///
-/// CEF supports both a Chrome runtime style (based on the Chrome UI layer) and
-/// an Alloy runtime style (based on the Chromium content layer). Chrome style
-/// provides the full Chrome UI and browser functionality whereas Alloy style
-/// provides less default browser functionality but adds additional client
-/// callbacks and support for windowless (off-screen) rendering. The style type
-/// is individually configured for each window/browser at creation time and
-/// different styles can be mixed during runtime. For additional comparative
-/// details on runtime styles see
-/// https://bitbucket.org/chromiumembedded/cef/wiki/Architecture.md#markdown-header-cef3
-///
-/// Windowless rendering will always use Alloy style. Windowed rendering with a
-/// default window or client-provided parent window can configure the style via
-/// CefWindowInfo.runtime_style. Windowed rendering with the Views framework can
-/// configure the style via CefWindowDelegate::GetWindowRuntimeStyle and
-/// CefBrowserViewDelegate::GetBrowserRuntimeStyle. Alloy style Windows with the
-/// Views framework can host only Alloy style BrowserViews but Chrome style
-/// Windows can host both style BrowserViews. Additionally, a Chrome style
-/// Window can host at most one Chrome style BrowserView but potentially
-/// multiple Alloy style BrowserViews. See CefWindowInfo.runtime_style
-/// documentation for any additional platform-specific limitations.
-///
-typedef enum {
-  ///
-  /// Use the default style. See above documentation for exceptions.
-  ///
-  CEF_RUNTIME_STYLE_DEFAULT,
-
-  ///
-  /// Use Chrome style.
-  ///
-  CEF_RUNTIME_STYLE_CHROME,
-
-  ///
-  /// Use Alloy style.
-  ///
-  CEF_RUNTIME_STYLE_ALLOY,
-} cef_runtime_style_t;
-
-///
 /// Structure representing a point.
 ///
 typedef struct _cef_point_t {
@@ -259,24 +217,6 @@ typedef struct _cef_insets_t {
 } cef_insets_t;
 
 ///
-/// Specifies where along the axis the CefBoxLayout child views should be laid
-/// out. Should be kept in sync with Chromium's views::LayoutAlignment type.
-///
-typedef enum {
-  /// Child views will be left/top-aligned.
-  CEF_AXIS_ALIGNMENT_START,
-
-  /// Child views will be center-aligned.
-  CEF_AXIS_ALIGNMENT_CENTER,
-
-  /// Child views will be right/bottom-aligned.
-  CEF_AXIS_ALIGNMENT_END,
-
-  /// Child views will be stretched to fit.
-  CEF_AXIS_ALIGNMENT_STRETCH,
-} cef_axis_alignment_t;
-
-///
 /// Docking modes supported by CefWindow::AddOverlay.
 ///
 typedef enum {
@@ -296,6 +236,53 @@ typedef enum {
   MBT_RIGHT,
 } cef_mouse_button_type_t;
 
+///
+/// Specifies where along the main axis the CefBoxLayout child views should be
+/// laid out.
+///
+typedef enum {
+  ///
+  /// Child views will be left-aligned.
+  ///
+  CEF_MAIN_AXIS_ALIGNMENT_START,
+
+  ///
+  /// Child views will be center-aligned.
+  ///
+  CEF_MAIN_AXIS_ALIGNMENT_CENTER,
+
+  ///
+  /// Child views will be right-aligned.
+  ///
+  CEF_MAIN_AXIS_ALIGNMENT_END,
+} cef_main_axis_alignment_t;
+
+///
+/// Specifies where along the cross axis the CefBoxLayout child views should be
+/// laid out.
+///
+typedef enum {
+  ///
+  /// Child views will be stretched to fit.
+  ///
+  CEF_CROSS_AXIS_ALIGNMENT_STRETCH,
+
+  ///
+  /// Child views will be left-aligned.
+  ///
+  CEF_CROSS_AXIS_ALIGNMENT_START,
+
+  ///
+  /// Child views will be center-aligned.
+  ///
+  CEF_CROSS_AXIS_ALIGNMENT_CENTER,
+
+  ///
+  /// Child views will be right-aligned.
+  ///
+  CEF_CROSS_AXIS_ALIGNMENT_END,
+} cef_cross_axis_alignment_t;
+
 /// Structure representing a draggable region.
 ///
 typedef struct _cef_draggable_region_t {
@@ -310,6 +297,9 @@ typedef struct _cef_draggable_region_t {
   int draggable;
 } cef_draggable_region_t;
 
+///
+// All ref-counted framework structures must include this structure first.
+///
 typedef struct _cef_base_ref_counted_t {
   ///
   // Size of the data structure.
@@ -339,8 +329,6 @@ typedef struct _cef_base_ref_counted_t {
   ///
   int(CEF_CALLBACK* has_at_least_one_ref)(struct _cef_base_ref_counted_t* self);
 } cef_base_ref_counted_t;
-
-struct _cef_view_t;
 
 ///
 /// Implement this structure to handle view events. All size and position values
@@ -434,28 +422,6 @@ typedef struct _cef_view_delegate_t {
   ///
   void(CEF_CALLBACK* on_blur)(struct _cef_view_delegate_t* self,
                               struct _cef_view_t* view);
-
-  ///
-  /// Called when the theme for |view| has changed, after the new theme colors
-  /// have already been applied. Views are notified via the component hierarchy
-  /// in depth-first reverse order (children before parents).
-  ///
-  /// This will be called in the following cases:
-  ///
-  /// 1. When |view|, or a parent of |view|, is added to a Window. 2. When the
-  /// native/OS or Chrome theme changes for the Window that contains
-  ///    |view|. See CefWindowDelegate::OnThemeColorsChanged documentation.
-  /// 3. When the client explicitly calls cef_window_t::ThemeChanged on the
-  /// Window
-  ///    that contains |view|.
-  ///
-  /// Optionally use this callback to override the new per-View theme colors by
-  /// calling cef_view_t::SetBackgroundColor or the appropriate component-
-  /// specific function. See cef_window_t::SetThemeColor documentation for how
-  /// to customize additional Window theme colors.
-  ///
-  void(CEF_CALLBACK* on_theme_changed)(struct _cef_view_delegate_t* self,
-                                       struct _cef_view_t* view);
 } cef_view_delegate_t;
 
 typedef struct _cef_panel_delegate_t {
@@ -751,29 +717,15 @@ typedef struct _cef_view_t {
   void(CEF_CALLBACK* request_focus)(struct _cef_view_t* self);
 
   ///
-  /// Sets the background color for this View. The background color will be
-  /// automatically reset when cef_view_delegate_t::OnThemeChanged is called.
+  /// Sets the background color for this View.
   ///
   void(CEF_CALLBACK* set_background_color)(struct _cef_view_t* self,
                                            cef_color_t color);
 
   ///
-  /// Returns the background color for this View. If the background color is
-  /// unset then the current `GetThemeColor(CEF_ColorPrimaryBackground)` value
-  /// will be returned. If this View belongs to an overlay (created with
-  /// cef_window_t::AddOverlayView), and the background color is unset, then a
-  /// value of transparent (0) will be returned.
+  /// Returns the background color for this View.
   ///
   cef_color_t(CEF_CALLBACK* get_background_color)(struct _cef_view_t* self);
-
-  ///
-  /// Returns the current theme color associated with |color_id|, or the
-  /// placeholder color (red) if unset. See cef_color_ids.h for standard ID
-  /// values. Standard colors can be overridden and custom colors can be added
-  /// using cef_window_t::SetThemeColor.
-  ///
-  cef_color_t(CEF_CALLBACK* get_theme_color)(struct _cef_view_t* self,
-                                             int color_id);
 
   ///
   /// Convert |point| from this View's coordinate system to DIP screen
@@ -853,7 +805,7 @@ typedef struct _cef_browser_view_t {
 
   ///
   /// Returns the Chrome toolbar associated with this BrowserView. Only
-  /// supported when using Chrome style. The cef_browser_view_delegate_t::
+  /// supported when using the Chrome runtime. The cef_browser_view_delegate_t::
   /// get_chrome_toolbar_type() function must return a value other than
   /// CEF_CTT_NONE and the toolbar will not be available until after this
   /// BrowserView is added to a cef_window_t and
@@ -863,29 +815,16 @@ typedef struct _cef_browser_view_t {
       struct _cef_browser_view_t* self);
 
   ///
-  /// Sets whether normal priority accelerators are first forwarded to the web
-  /// content (`keydown` event handler) or cef_keyboard_handler_t. Normal
-  /// priority accelerators can be registered via cef_window_t::SetAccelerator
-  /// (with |high_priority|=false (0)) or internally for standard accelerators
-  /// supported by Chrome style. If |prefer_accelerators| is true (1) then the
-  /// matching accelerator will be triggered immediately (calling
-  /// cef_window_delegate_t::OnAccelerator or
-  /// cef_command_handler_t::OnChromeCommand respectively) and the event will
-  /// not be forwarded to the web content or cef_keyboard_handler_t first. If
-  /// |prefer_accelerators| is false (0) then the matching accelerator will only
-  /// be triggered if the event is not handled by web content (`keydown` event
-  /// handler that calls `event.preventDefault()`) or by cef_keyboard_handler_t.
-  /// The default value is false (0).
+  /// Sets whether accelerators registered with cef_window_t::SetAccelerator are
+  /// triggered before or after the event is sent to the cef_browser_t. If
+  /// |prefer_accelerators| is true (1) then the matching accelerator will be
+  /// triggered immediately and the event will not be sent to the cef_browser_t.
+  /// If |prefer_accelerators| is false (0) then the matching accelerator will
+  /// only be triggered if the event is not handled by web content or by
+  /// cef_keyboard_handler_t. The default value is false (0).
   ///
   void(CEF_CALLBACK* set_prefer_accelerators)(struct _cef_browser_view_t* self,
                                               int prefer_accelerators);
-
-  ///
-  /// Returns the runtime style for this BrowserView (ALLOY or CHROME). See
-  /// cef_runtime_style_t documentation for details.
-  ///
-  cef_runtime_style_t(CEF_CALLBACK* get_runtime_style)(
-      struct _cef_browser_view_t* self);
 } cef_browser_view_t;
 
 ///
@@ -923,12 +862,12 @@ typedef struct _cef_box_layout_settings_t {
   ///
   /// Specifies where along the main axis the child views should be laid out.
   ///
-  cef_axis_alignment_t main_axis_alignment;
+  cef_main_axis_alignment_t main_axis_alignment;
 
   ///
   /// Specifies where along the cross axis the child views should be laid out.
   ///
-  cef_axis_alignment_t cross_axis_alignment;
+  cef_cross_axis_alignment_t cross_axis_alignment;
 
   ///
   /// Minimum cross axis size.
@@ -1134,9 +1073,7 @@ typedef struct _cef_window_t {
   void(CEF_CALLBACK* restore)(struct _cef_window_t* self);
 
   ///
-  /// Set fullscreen Window state. The
-  /// cef_window_delegate_t::OnWindowFullscreenTransition function will be
-  /// called during the fullscreen transition for notification purposes.
+  /// Set fullscreen Window state.
   ///
   void(CEF_CALLBACK* set_fullscreen)(struct _cef_window_t* self,
                                      int fullscreen);
@@ -1199,9 +1136,8 @@ typedef struct _cef_window_t {
   ///
   /// Add a View that will be overlayed on the Window contents with absolute
   /// positioning and high z-order. Positioning is controlled by |docking_mode|
-  /// as described below. Setting |can_activate| to true (1) will allow the
-  /// overlay view to receive input focus. The returned cef_overlay_controller_t
-  /// object is used to control the overlay. Overlays are hidden by default.
+  /// as described below. The returned cef_overlay_controller_t object is used
+  /// to control the overlay. Overlays are hidden by default.
   ///
   /// With CEF_DOCKING_MODE_CUSTOM:
   ///   1. The overlay is initially hidden, sized to |view|'s preferred size,
@@ -1229,8 +1165,7 @@ typedef struct _cef_window_t {
   struct _cef_overlay_controller_t*(CEF_CALLBACK* add_overlay_view)(
       struct _cef_window_t* self,
       struct _cef_view_t* view,
-      cef_docking_mode_t docking_mode,
-      int can_activate);
+      cef_docking_mode_t docking_mode);
 
   ///
   /// Show a menu with contents |menu_model|. |screen_point| specifies the menu
@@ -1313,25 +1248,16 @@ typedef struct _cef_window_t {
 
   ///
   /// Set the keyboard accelerator for the specified |command_id|. |key_code|
-  /// can be any virtual key or character value. Required modifier keys are
-  /// specified by |shift_pressed|, |ctrl_pressed| and/or |alt_pressed|.
+  /// can be any virtual key or character value.
   /// cef_window_delegate_t::OnAccelerator will be called if the keyboard
   /// combination is triggered while this window has focus.
-  ///
-  /// The |high_priority| value will be considered if a child cef_browser_view_t
-  /// has focus when the keyboard combination is triggered. If |high_priority|
-  /// is true (1) then the key event will not be forwarded to the web content
-  /// (`keydown` event handler) or cef_keyboard_handler_t first. If
-  /// |high_priority| is false (0) then the behavior will depend on the
-  /// cef_browser_view_t::SetPreferAccelerators configuration.
   ///
   void(CEF_CALLBACK* set_accelerator)(struct _cef_window_t* self,
                                       int command_id,
                                       int key_code,
                                       int shift_pressed,
                                       int ctrl_pressed,
-                                      int alt_pressed,
-                                      int high_priority);
+                                      int alt_pressed);
 
   ///
   /// Remove the keyboard accelerator for the specified |command_id|.
@@ -1343,50 +1269,6 @@ typedef struct _cef_window_t {
   /// Remove all keyboard accelerators.
   ///
   void(CEF_CALLBACK* remove_all_accelerators)(struct _cef_window_t* self);
-
-  ///
-  /// Override a standard theme color or add a custom color associated with
-  /// |color_id|. See cef_color_ids.h for standard ID values. Recommended usage
-  /// is as follows:
-  ///
-  /// 1. Customize the default native/OS theme by calling SetThemeColor before
-  ///    showing the first Window. When done setting colors call
-  ///    CefWindow::ThemeChanged to trigger CefViewDelegate::OnThemeChanged
-  ///    notifications.
-  /// 2. Customize the current native/OS or Chrome theme after it changes by
-  ///    calling SetThemeColor from the CefWindowDelegate::OnThemeColorsChanged
-  ///    callback. CefViewDelegate::OnThemeChanged notifications will then be
-  ///    triggered automatically.
-  ///
-  /// The configured color will be available immediately via
-  /// cef_view_t::GetThemeColor and will be applied to each View in this
-  /// Window's component hierarchy when cef_view_delegate_t::OnThemeChanged is
-  /// called. See OnThemeColorsChanged documentation for additional details.
-  ///
-  /// Clients wishing to add custom colors should use |color_id| values >=
-  /// CEF_ChromeColorsEnd.
-  ///
-  void(CEF_CALLBACK* set_theme_color)(struct _cef_window_t* self,
-                                      int color_id,
-                                      cef_color_t color);
-
-  ///
-  /// Trigger cef_view_delegate_t::OnThemeChanged callbacks for each View in
-  /// this Window's component hierarchy. Unlike a native/OS or Chrome theme
-  /// change this function does not reset theme colors to standard values and
-  /// does not result in a call to cef_window_delegate_t::OnThemeColorsChanged.
-  ///
-  /// Do not call this function from cef_window_delegate_t::OnThemeColorsChanged
-  /// or cef_view_delegate_t::OnThemeChanged.
-  ///
-  void(CEF_CALLBACK* theme_changed)(struct _cef_window_t* self);
-
-  ///
-  /// Returns the runtime style for this Window (ALLOY or CHROME). See
-  /// cef_runtime_style_t documentation for details.
-  ///
-  cef_runtime_style_t(CEF_CALLBACK* get_runtime_style)(
-      struct _cef_window_t* self);
 } cef_window_t;
 
 ///
@@ -1436,20 +1318,6 @@ typedef struct _cef_window_delegate_t {
       struct _cef_window_delegate_t* self,
       struct _cef_window_t* window,
       const cef_rect_t* new_bounds);
-
-  ///
-  /// Called when |window| is transitioning to or from fullscreen mode. On MacOS
-  /// the transition occurs asynchronously with |is_competed| set to false (0)
-  /// when the transition starts and true (1) after the transition completes. On
-  /// other platforms the transition occurs synchronously with |is_completed|
-  /// set to true (1) after the transition completes. With Alloy style you must
-  /// also implement cef_display_handler_t::OnFullscreenModeChange to handle
-  /// fullscreen transitions initiated by browser content.
-  ///
-  void(CEF_CALLBACK* on_window_fullscreen_transition)(
-      struct _cef_window_delegate_t* self,
-      struct _cef_window_t* window,
-      int is_completed);
 
   ///
   /// Return the parent for |window| or NULL if the |window| does not have a
@@ -1524,20 +1392,6 @@ typedef struct _cef_window_delegate_t {
                                          float* titlebar_height);
 
   ///
-  /// Return whether the view should accept the initial mouse-down event,
-  /// allowing it to respond to click-through behavior. If STATE_ENABLED is
-  /// returned, the view will be sent a mouseDown: message for an initial mouse-
-  /// down event, activating the view with one click, instead of clicking first
-  /// to make the window active and then clicking the view.
-  ///
-  /// This function is only supported on macOS. For more details, refer to the
-  /// documentation of acceptsFirstMouse.
-  ///
-  cef_state_t(CEF_CALLBACK* accepts_first_mouse)(
-      struct _cef_window_delegate_t* self,
-      struct _cef_window_t* window);
-
-  ///
   /// Return true (1) if |window| can be resized.
   ///
   int(CEF_CALLBACK* can_resize)(struct _cef_window_delegate_t* self,
@@ -1581,55 +1435,15 @@ typedef struct _cef_window_delegate_t {
                                   const cef_key_event_t* event);
 
   ///
-  /// Called after the native/OS or Chrome theme for |window| has changed.
-  /// |chrome_theme| will be true (1) if the notification is for a Chrome theme.
+  /// Called when the |window| is transitioning to or from fullscreen mode. The
+  /// transition occurs in two stages, with |is_competed| set to false (0) when
+  /// the transition starts and true (1) when the transition completes. This
+  /// function is only supported on macOS.
   ///
-  /// Native/OS theme colors are configured globally and do not need to be
-  /// customized for each Window individually. An example of a native/OS theme
-  /// change that triggers this callback is when the user switches between dark
-  /// and light mode during application lifespan. Native/OS theme changes can be
-  /// disabled by passing the `--force-dark-mode` or `--force-light-mode`
-  /// command-line flag.
-  ///
-  /// Chrome theme colors will be applied and this callback will be triggered
-  /// if/when a BrowserView is added to the Window's component hierarchy. Chrome
-  /// theme colors can be configured on a per-RequestContext basis using
-  /// cef_request_context_t::SetChromeColorScheme or (Chrome style only) by
-  /// visiting chrome://settings/manageProfile. Any theme changes using those
-  /// mechanisms will also trigger this callback. Chrome theme colors will be
-  /// persisted and restored from disk cache.
-  ///
-  /// This callback is not triggered on Window creation so clients that wish to
-  /// customize the initial native/OS theme must call
-  /// cef_window_t::SetThemeColor and cef_window_t::ThemeChanged before showing
-  /// the first Window.
-  ///
-  /// Theme colors will be reset to standard values before this callback is
-  /// called for the first affected Window. Call cef_window_t::SetThemeColor
-  /// from inside this callback to override a standard color or add a custom
-  /// color. cef_view_delegate_t::OnThemeChanged will be called after this
-  /// callback for the complete |window| component hierarchy.
-  ///
-  void(CEF_CALLBACK* on_theme_colors_changed)(
+  void(CEF_CALLBACK* on_window_fullscreen_transition)(
       struct _cef_window_delegate_t* self,
       struct _cef_window_t* window,
-      int chrome_theme);
-
-  ///
-  /// Optionally change the runtime style for this Window. See
-  /// cef_runtime_style_t documentation for details.
-  ///
-  cef_runtime_style_t(CEF_CALLBACK* get_window_runtime_style)(
-      struct _cef_window_delegate_t* self);
-
-  ///
-  /// Return Linux-specific window properties for correctly handling by window
-  /// managers
-  ///
-  int(CEF_CALLBACK* get_linux_window_properties)(
-      struct _cef_window_delegate_t* self,
-      struct _cef_window_t* window,
-      struct _cef_linux_window_properties_t* properties);
+      int is_completed);
 } cef_window_delegate_t;
 
 ///
@@ -1675,22 +1489,19 @@ typedef struct _cef_window_info_t {
   /// Handle for the new browser window. Only used with windowed rendering.
   ///
   cef_window_handle_t window;
-
-  ///
-  /// Optionally change the runtime style. Alloy style will always be used if
-  /// |windowless_rendering_enabled| is true. See cef_runtime_style_t
-  /// documentation for details.
-  ///
-  cef_runtime_style_t runtime_style;
 } cef_window_info_t;
 
 #pragma endregion
 
 _cef_window_t* mainWindow;
 
-int CEF_CALLBACK is_frameless_hook(struct _cef_window_delegate_t* self, struct _cef_window_t* window) {
+int WINAPI is_frameless_hook(struct _cef_window_delegate_t* self, struct _cef_window_t* window) {
     Wh_Log(L"is_frameless_hook");
     return 0;
+}
+
+_cef_overlay_controller_t* add_overlay_view_hook(struct _cef_window_t* self, struct _cef_view_t* view, cef_docking_mode_t docking_mode, int can_activate) {
+    Wh_Log(L"asdf");
 }
 
 typedef _cef_window_t* (*cef_window_create_top_level_t)(cef_window_delegate_t* delegate);
@@ -1698,12 +1509,17 @@ cef_window_create_top_level_t cef_window_create_top_level_original;
 _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate) {
     Wh_Log(L"cef_window_create_top_level_hook");
 
+
     Wh_Log(L"is_frameless offset: %#x", (char *)&(delegate->is_frameless) - (char *)delegate);
-    int* CEF_CALLBACK is_frameless_orig = (int*)((char *)delegate + 0xd0);
-    Wh_Log(L"%p %p %p", &(delegate->is_frameless), delegate, is_frameless_orig);
     delegate->is_frameless = is_frameless_hook;
     mainWindow = cef_window_create_top_level_original(delegate);
-    return mainWindow;
+    Wh_Log(L"%d", mainWindow->add_overlay_view);
+    //mainWindow->add_overlay_view = add_overlay_view_hook;
+    Wh_Log(L"%d", mainWindow->add_overlay_view);
+    //cef_window_create_top_level_original(delegate);
+
+    //Wh_Log(L"%d", delegate->is_frameless(delegate, MainWindow)); // This somoehow causes crashes
+    return NULL;
 }
 
 int cnt = 0;
