@@ -9,6 +9,7 @@
 // @homepage        https://www.ingan121.com/
 // @include         spotify.exe
 // @include         cefclient.exe
+// @compilerOptions -lcomctl32 -luxtheme
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -32,6 +33,8 @@
 #include <cstdint>
 #include <libloaderapi.h>
 #include <windhawk_utils.h>
+#include <windows.h>
+#include <uxtheme.h>
 
 #define CEF_CALLBACK __stdcall
 #define cef_window_handle_t HWND
@@ -1688,6 +1691,14 @@ typedef struct _cef_window_info_t {
 
 _cef_window_t* mainWindow;
 
+LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (uMsg == WM_NCHITTEST || uMsg == WM_NCLBUTTONDOWN || uMsg == WM_NCPAINT) {
+        // Unhook Spotify's custom window control hover handling
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
 int CEF_CALLBACK is_frameless_hook(struct _cef_window_delegate_t* self, struct _cef_window_t* window) {
     Wh_Log(L"is_frameless_hook");
     return 0;
@@ -1699,10 +1710,10 @@ _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate)
     Wh_Log(L"cef_window_create_top_level_hook");
 
     Wh_Log(L"is_frameless offset: %#x", (char *)&(delegate->is_frameless) - (char *)delegate);
-    int* CEF_CALLBACK is_frameless_orig = (int*)((char *)delegate + 0xd0);
-    Wh_Log(L"%p %p %p", &(delegate->is_frameless), delegate, is_frameless_orig);
     delegate->is_frameless = is_frameless_hook;
     mainWindow = cef_window_create_top_level_original(delegate);
+    SetWindowSubclass(mainWindow->get_window_handle(mainWindow), SubclassProc, 0, 0);
+    Wh_Log(L"get_window_handle offset: %#x", (char *)&(mainWindow->get_window_handle) - (char *)mainWindow);
     return mainWindow;
 }
 
@@ -1728,6 +1739,13 @@ _cef_panel_t* cef_panel_create_hook(_cef_panel_delegate_t* delegate) {
     Wh_Log(L"add_child_view offset: %#x", (char *)&(panel->add_child_view) - (char *)panel);
     panel->add_child_view = add_child_view_hook;
     return panel;
+}
+
+using SetWindowThemeAttribute_t = decltype(&SetWindowThemeAttribute);
+SetWindowThemeAttribute_t SetWindowThemeAttribute_original;
+BOOL WINAPI SetWindowThemeAttribute_hook(HWND hwnd, enum WINDOWTHEMEATTRIBUTETYPE eAttribute, PVOID pvAttribute, DWORD cbAttribute) {
+    Wh_Log(L"SetWindowThemeAttribute_hook");
+    return TRUE;
 }
 
 typedef int (*cef_version_info_t)(int entry);
@@ -1762,6 +1780,8 @@ BOOL Wh_ModInit() {
                        (void**)&cef_window_create_top_level_original);
     Wh_SetFunctionHook((void*)cef_panel_create, (void*)cef_panel_create_hook,
                       (void**)&cef_panel_create_original);
+    Wh_SetFunctionHook((void*)SetWindowThemeAttribute, (void*)SetWindowThemeAttribute_hook,
+                      (void**)&SetWindowThemeAttribute_original);
     return TRUE;
 }
 

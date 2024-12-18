@@ -9,6 +9,7 @@
 // @homepage        https://www.ingan121.com/
 // @include         spotify.exe
 // @include         cefclient.exe
+// @compilerOptions -lcomctl32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -1425,51 +1426,6 @@ typedef struct _cef_window_delegate_t {
       int is_completed);
 } cef_window_delegate_t;
 
-///
-// Structure representing window information.
-///
-typedef struct _cef_window_info_t {
-  // Standard parameters required by CreateWindowEx()
-  DWORD ex_style;
-  cef_string_t window_name;
-  DWORD style;
-  cef_rect_t bounds;
-  cef_window_handle_t parent_window;
-  HMENU menu;
-
-  ///
-  // Set to true (1) to create the browser using windowless (off-screen)
-  // rendering. No window will be created for the browser and all rendering will
-  // occur via the CefRenderHandler interface. The |parent_window| value will be
-  // used to identify monitor info and to act as the parent window for dialogs,
-  // context menus, etc. If |parent_window| is not provided then the main screen
-  // monitor will be used and some functionality that requires a parent window
-  // may not function correctly. In order to create windowless browsers the
-  // CefSettings.windowless_rendering_enabled value must be set to true.
-  // Transparent painting is enabled by default but can be disabled by setting
-  // CefBrowserSettings.background_color to an opaque value.
-  ///
-  int windowless_rendering_enabled;
-
-  ///
-  // Set to true (1) to enable shared textures for windowless rendering. Only
-  // valid if windowless_rendering_enabled above is also set to true. Currently
-  // only supported on Windows (D3D11).
-  ///
-  int shared_texture_enabled;
-
-  ///
-  // Set to true (1) to enable the ability to issue BeginFrame requests from the
-  // client application by calling CefBrowserHost::SendExternalBeginFrame.
-  ///
-  int external_begin_frame_enabled;
-
-  ///
-  // Handle for the new browser window. Only used with windowed rendering.
-  ///
-  cef_window_handle_t window;
-} cef_window_info_t;
-
 #pragma endregion
 
 _cef_window_t* mainWindow;
@@ -1479,8 +1435,12 @@ int WINAPI is_frameless_hook(struct _cef_window_delegate_t* self, struct _cef_wi
     return 0;
 }
 
-_cef_overlay_controller_t* add_overlay_view_hook(struct _cef_window_t* self, struct _cef_view_t* view, cef_docking_mode_t docking_mode, int can_activate) {
-    Wh_Log(L"asdf");
+LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (uMsg == WM_NCHITTEST || uMsg == WM_NCLBUTTONDOWN || uMsg == WM_NCPAINT || uMsg == WM_NCCREATE || uMsg == WM_NCCALCSIZE) {
+        // Unhook Spotify's custom window control hover handling
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
 typedef _cef_window_t* (*cef_window_create_top_level_t)(cef_window_delegate_t* delegate);
@@ -1491,46 +1451,9 @@ _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate)
     Wh_Log(L"is_frameless offset: %#x", (char *)&(delegate->is_frameless) - (char *)delegate);
     delegate->is_frameless = is_frameless_hook;
     mainWindow = cef_window_create_top_level_original(delegate);
-    Wh_Log(L"%d", mainWindow->add_overlay_view);
-    //mainWindow->add_overlay_view = add_overlay_view_hook;
-    Wh_Log(L"%d", mainWindow->add_overlay_view);
-    //cef_window_create_top_level_original(delegate);
-
-    //Wh_Log(L"%d", delegate->is_frameless(delegate, MainWindow)); // This somoehow causes crashes
+    Wh_Log(L"get_window_handle offset: %#x", (char *)&(mainWindow->get_window_handle) - (char *)mainWindow);
+    SetWindowSubclass(mainWindow->get_window_handle(mainWindow), SubclassProc, 0, 0);
     return NULL;
-}
-
-
-/*
-///
-/// Create a new browser using the window parameters specified by |windowInfo|.
-/// All values will be copied internally and the actual window (if any) will be
-/// created on the UI thread. If |request_context| is NULL the global request
-/// context will be used. This function can be called on any browser process
-/// thread and will not block. The optional |extra_info| parameter provides an
-/// opportunity to specify extra information specific to the created browser
-/// that will be passed to cef_render_process_handler_t::on_browser_created() in
-/// the render process.
-///
-CEF_EXPORT int cef_browser_host_create_browser(
-    const cef_window_info_t* windowInfo,
-    struct _cef_client_t* client,
-    const cef_string_t* url,
-    const struct _cef_browser_settings_t* settings,
-    struct _cef_dictionary_value_t* extra_info,
-    struct _cef_request_context_t* request_context);
-*/
-
-typedef int (*cef_browser_host_create_browser_t)(const cef_window_info_t* windowInfo,
-  struct _cef_client_t* client,
-  const cef_string_t* url,
-  const struct _cef_browser_settings_t* settings,
-  struct _cef_dictionary_value_t* extra_info,
-  struct _cef_request_context_t* request_context);
-cef_browser_host_create_browser_t cef_browser_host_create_browser_original;
-int cef_browser_host_create_browser_hook(const cef_window_info_t* windowInfo, struct _cef_client_t* client, const cef_string_t* url, const struct _cef_browser_settings_t* settings, struct _cef_dictionary_value_t* extra_info, struct _cef_request_context_t* request_context) {
-    Wh_Log(L"cef_browser_host_create_browser_hook");
-    return cef_browser_host_create_browser_original(windowInfo, client, url, settings, extra_info, request_context);
 }
 
 // The mod is being initialized, load settings, hook functions, and do other

@@ -9,6 +9,7 @@
 // @homepage        https://www.ingan121.com/
 // @include         spotify.exe
 // @include         cefclient.exe
+// @compilerOptions -lcomctl32
 // ==/WindhawkMod==
 
 // ==WindhawkModReadme==
@@ -1500,8 +1501,12 @@ int WINAPI is_frameless_hook(struct _cef_window_delegate_t* self, struct _cef_wi
     return 0;
 }
 
-_cef_overlay_controller_t* add_overlay_view_hook(struct _cef_window_t* self, struct _cef_view_t* view, cef_docking_mode_t docking_mode, int can_activate) {
-    Wh_Log(L"asdf");
+LRESULT CALLBACK SubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (uMsg == WM_NCHITTEST || uMsg == WM_NCLBUTTONDOWN || uMsg == WM_NCPAINT || uMsg == WM_NCCREATE || uMsg == WM_NCCALCSIZE) {
+        // Unhook Spotify's custom window control hover handling
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
 
 typedef _cef_window_t* (*cef_window_create_top_level_t)(cef_window_delegate_t* delegate);
@@ -1513,12 +1518,8 @@ _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate)
     Wh_Log(L"is_frameless offset: %#x", (char *)&(delegate->is_frameless) - (char *)delegate);
     delegate->is_frameless = is_frameless_hook;
     mainWindow = cef_window_create_top_level_original(delegate);
-    Wh_Log(L"%d", mainWindow->add_overlay_view);
-    //mainWindow->add_overlay_view = add_overlay_view_hook;
-    Wh_Log(L"%d", mainWindow->add_overlay_view);
-    //cef_window_create_top_level_original(delegate);
-
-    //Wh_Log(L"%d", delegate->is_frameless(delegate, MainWindow)); // This somoehow causes crashes
+    Wh_Log(L"get_window_handle offset: %#x", (char *)&(mainWindow->get_window_handle) - (char *)mainWindow);
+    SetWindowSubclass(mainWindow->get_window_handle(mainWindow), SubclassProc, 0, 0);
     return NULL;
 }
 
