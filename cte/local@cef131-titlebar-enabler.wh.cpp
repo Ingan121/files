@@ -1675,6 +1675,9 @@ _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate)
     Wh_Log(L"is_frameless offset: %#x", (char *)&(delegate->is_frameless) - (char *)delegate);
     delegate->is_frameless = is_frameless_hook;
     mainWindow = cef_window_create_top_level_original(delegate);
+    mainWindow->base.add_child_view = NULL;
+    mainWindow->base.add_child_view_at = NULL;
+    mainWindow->send_mouse_events = NULL;
     //SetWindowSubclass(mainWindow->get_window_handle(mainWindow), SubclassProc, 0, 0);
     Wh_Log(L"get_window_handle offset: %#x", (char *)&(mainWindow->get_window_handle) - (char *)mainWindow);
     return mainWindow;
@@ -1697,6 +1700,8 @@ typedef _cef_panel_t* (*cef_panel_create_t)(_cef_panel_delegate_t* delegate);
 cef_panel_create_t cef_panel_create_original;
 _cef_panel_t* cef_panel_create_hook(_cef_panel_delegate_t* delegate) {
     Wh_Log(L"cef_panel_create_hook");
+    delegate->base.get_preferred_size = NULL;
+    Wh_Log(L"get_preferred_size offset: %#x", (char *)&(delegate->base.get_preferred_size) - (char *)delegate);
     _cef_panel_t* panel = cef_panel_create_original(delegate);
     add_child_view_original = panel->add_child_view;
     Wh_Log(L"add_child_view offset: %#x", (char *)&(panel->add_child_view) - (char *)panel);
