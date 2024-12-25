@@ -1498,14 +1498,24 @@ _cef_window_t* cef_window_create_top_level_hook(cef_window_delegate_t* delegate)
 
 int cnt = 0;
 
+typedef void (*set_background_color_t)(struct _cef_view_t* self, cef_color_t color);
+set_background_color_t CEF_CALLBACK set_background_color_original;
+void CEF_CALLBACK set_background_color_hook(struct _cef_view_t* self, cef_color_t color) {
+    Wh_Log(L"set_background_color_hook: %#x", color);
+    // 0x87000000: normal, 0x3fffffff: hover, 0x33ffffff: active, 0xffc42b1c: close button hover, 0xff941320: close button active
+    set_background_color_original(self, color);
+    return;
+}
+
 typedef void (*add_child_view_t)(struct _cef_panel_t* self, struct _cef_view_t* view);
 add_child_view_t CEF_CALLBACK add_child_view_original;
 void CEF_CALLBACK add_child_view_hook(struct _cef_panel_t* self, struct _cef_view_t* view) {
     Wh_Log(L"add_child_view_hook: %d", cnt++);
     // 0: Minimize, 1: Maximize, 2: Close, 3: Menu (removing this also prevents alt key from working)
-    if (cnt == 4) {
-        add_child_view_original(self, view);
-    }
+    set_background_color_original = view->set_background_color;
+    Wh_Log(L"set_background_color offset: %#x", (char *)&(view->set_background_color) - (char *)view);
+    view->set_background_color = set_background_color_hook;
+    add_child_view_original(self, view);
     return;
 }
 
